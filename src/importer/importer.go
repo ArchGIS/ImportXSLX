@@ -2,12 +2,26 @@ package importer
 
 import (
 	"bytes"
+	"errs"
 	"fmt"
 	"regexp"
 	"strings"
+	"xl"
 
 	"github.com/tealeg/xlsx"
 )
+
+func fetch(cell *xlsx.Cell) string {
+	stringValue, err := cell.String()
+	if err != nil {
+		// Не знаю, что здесь за ошибка может быть, лень
+		// смотреть исходники функции xlsx.Cell.String(). Возможно она всегда nil
+		// ошибку возвращает. Это можно проверить как-нибудь потом.
+		panic(err)
+	}
+
+	return stringValue
+}
 
 var (
 	// "1000г."  "1000 г." "1000 г" "1000г"
@@ -20,18 +34,6 @@ var (
 	nameRx = regexp.MustCompile(`[\p{L}-]+\s*\p{L}\.\p{L}\.|\p{L}+`)
 )
 
-func fetch(cell *xlsx.Cell) string {
-	value, err := cell.String()
-	if err != nil {
-		// Не знаю, что здесь за ошибка может быть, лень
-		// смотреть исходники функции String(). Возможно она всегда nil
-		// ошибку возвращает. Это можно проверить как-нибудь потом.
-		panic(err)
-	}
-
-	return value
-}
-
 func escape(s string) string {
 	return strings.Replace(s, `"`, `\"`, -1)
 }
@@ -42,11 +44,17 @@ func New(xslxFilePath string, scheme ParseScheme) (*Importer, error) {
 		return nil, err
 	}
 
+	table, err := xl.NewTable(xslxFilePath)
+	if err != nil {
+		return nil, err
+	}
+
 	sheet := file.Sheets[0] // Работаем только с первым листом
 	header := sheet.Rows[0] // Первый ряд - заголок
 	rows := sheet.Rows[1:]  // Остальные - данные
 
 	return &Importer{
+		table:   table,
 		scheme:  scheme,
 		header:  header,
 		rows:    rows,
@@ -56,23 +64,15 @@ func New(xslxFilePath string, scheme ParseScheme) (*Importer, error) {
 }
 
 func (my *Importer) ValidateHeader() []error {
-	errs := []error{}
+	validationErrs := []error{}
 
-	for _, cell := range my.header.Cells {
-		cellName, err := cell.String()
-		if err != nil {
-			panic(err)
-		}
-
-		info := my.scheme.Find(cellName)
-		if "" == info.Name {
-			errs = append(
-				errs, fmt.Errorf("Не найдена информация по полю %s", cellName),
-			)
+	for _, cellName := range my.table.Header {
+		if !my.scheme.Contains(cellName) {
+			validationErrs = append(validationErrs, errs.CellInfoNotFound(cellName))
 		}
 	}
 
-	return errs
+	return validationErrs
 }
 
 func (my *Importer) Parse() {

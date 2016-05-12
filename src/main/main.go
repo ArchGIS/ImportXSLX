@@ -27,15 +27,23 @@ var scheme1 = importer.ParseScheme{
 func panicGuard() {
 	if err := recover(); err != nil {
 		if fatal, ok := err.(errs.FatalError); ok {
-			fmt.Printf(`{"fatal": "%s"}`, fatal.Error())
+			fmt.Printf(`{"fatal":"%s"}`, fatal.Error())
 		} else {
-			fmt.Printf(`{"fatal": "unexpected error: %+v"`, err)
+			fmt.Printf(`{"fatal":"unexpected error: %+v"}`, err)
 		}
 	}
 }
 
-func main() {
+func printErrorsJson(e []error) {
+	print(`{"errors":[`)
+	for i := 0; i < len(e)-2; i++ {
+		fmt.Printf(`"%s",`, e[i].Error())
+	}
+	fmt.Printf(`"%s"`, e[len(e)-1].Error())
+	print(`]}`)
+}
 
+func main() {
 	defer panicGuard()
 
 	importer, err := importer.New("input/test.xlsx", scheme1)
@@ -43,15 +51,12 @@ func main() {
 		panic(err)
 	}
 
-	errs := importer.ValidateHeader()
-	if len(errs) != 0 {
-		println("ERRORS:")
-		for _, err := range errs {
-			fmt.Printf("%+v\n", err)
-		}
+	validationErrs := importer.ValidateHeader()
+	if len(validationErrs) == 0 {
+		importer.Parse()
+		query := importer.CypherString()
+		println(query)
+	} else {
+		printErrorsJson(validationErrs)
 	}
-
-	importer.Parse()
-	query := importer.CypherString()
-	println(query)
 }

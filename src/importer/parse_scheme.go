@@ -4,6 +4,11 @@ import (
 	"errs"
 )
 
+func (my ParseScheme) Contains(name string) bool {
+	cell := my.Find(name)
+	return cell.Name != ""
+}
+
 func (my ParseScheme) Find(name string) ParseSchemeCell {
 	for _, cell := range my.Cells {
 		if cell.Name == name {
@@ -11,7 +16,7 @@ func (my ParseScheme) Find(name string) ParseSchemeCell {
 		}
 	}
 
-	panic(errs.NewFatalf("%s: not found cell named '%s'", my.Name, name))
+	return ParseSchemeCell{}
 }
 
 func (my ParseScheme) IndexOf(name string) int {

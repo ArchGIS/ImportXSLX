@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"xl"
+
 	"github.com/tealeg/xlsx"
 )
 
@@ -15,6 +17,7 @@ type ParseScheme struct {
 }
 
 type Importer struct {
+	table   *xl.Table
 	scheme  ParseScheme
 	header  *xlsx.Row
 	rows    []*xlsx.Row
