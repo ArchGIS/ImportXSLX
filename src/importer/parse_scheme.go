@@ -1,7 +1,7 @@
 package importer
 
 import (
-	"fmt"
+	"errs"
 )
 
 func (my ParseScheme) Find(name string) ParseSchemeCell {
@@ -11,7 +11,7 @@ func (my ParseScheme) Find(name string) ParseSchemeCell {
 		}
 	}
 
-	panic(fmt.Sprintf("%s: not found cell named '%s'", my.Name, name))
+	panic(errs.NewFatalf("%s: not found cell named '%s'", my.Name, name))
 }
 
 func (my ParseScheme) IndexOf(name string) int {
@@ -21,5 +21,5 @@ func (my ParseScheme) IndexOf(name string) int {
 		}
 	}
 
-	panic(fmt.Sprintf("%s: not found index of cell named '%s'", my.Name, name))
+	panic(errs.NewFatalf("%s: not found index of cell named '%s'", my.Name, name))
 }

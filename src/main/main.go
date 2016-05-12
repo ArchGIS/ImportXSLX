@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errs"
 	"fmt"
 	"importer"
 )
@@ -22,11 +23,26 @@ var scheme1 = importer.ParseScheme{
 	},
 }
 
+// Защита от неожиданных ошибок и паник времени выполнения
+func panicGuard() {
+	if err := recover(); err != nil {
+		if fatal, ok := err.(errs.FatalError); ok {
+			fmt.Printf(`{"fatal": "%s"}`, fatal.Error())
+		} else {
+			fmt.Printf(`{"fatal": "unexpected error: %+v"`, err)
+		}
+	}
+}
+
 func main() {
+
+	defer panicGuard()
+
 	importer, err := importer.New("input/test.xlsx", scheme1)
 	if err != nil {
 		panic(err)
 	}
+
 	errs := importer.ValidateHeader()
 	if len(errs) != 0 {
 		println("ERRORS:")
