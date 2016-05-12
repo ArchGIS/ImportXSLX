@@ -1,5 +1,5 @@
 MATCH (au:Author {id:1}) // Автор исследования
-MATCH (r:Research {id:1}) // Исследование, которое содержит карту
+MATCH (research:Research {id:1}) // Исследование, которое содержит карту
 MATCH (map:Literature {id:1}) // Археологическая карта
 
 // Эпохи
@@ -10,6 +10,7 @@ CREATE (map)-[:References {pages:"54", n:"322"}]->(mon1)
 CREATE (mon1:Monument {})
 CREATE (medieval)-[:Has]->(mon1)
 CREATE (k1:Knowledge{description:"...", name:"..."})
+CREATE (research)-[:Contains]->(k1)
 CREATE (k1)-[:Describes]->(mon1)
 
 // Памятник1: Библиографическая ссылка1
