@@ -11,6 +11,6 @@ type FatalError struct {
 
 type RowError struct {
 	Line  int
-	Text  string
+	Texts []string
 	Cells []string
 }

@@ -35,13 +35,24 @@ func NewTable(xlsxFilePath string) (*Table, error) {
 	// Подготавливаем rows для Table
 	rows := make([]Row, len(xlsxRows))
 	for rowIndex, xlsxRow := range xlsxRows {
+		/*
+			row := Row{
+				Header: &header,
+				Cells:  make([]string, len(header)),
+			}
+
+			for cellIndex, cell := range xlsxRow.Cells {
+				row.Cells[cellIndex] = toString(cell)
+			}
+		*/
+
 		row := Row{
 			Header: &header,
-			Cells:  make([]string, len(header)),
+			Cells:  make(map[string]string, len(header)),
 		}
 
 		for cellIndex, cell := range xlsxRow.Cells {
-			row.Cells[cellIndex] = toString(cell)
+			row.Cells[header[cellIndex]] = toString(cell)
 		}
 
 		rows[rowIndex] = row

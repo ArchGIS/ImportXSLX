@@ -4,24 +4,8 @@ import (
 	"errs"
 	"fmt"
 	"importer"
+	"parsers"
 )
-
-// #FIXME: некоторые строки могут пустыми
-
-func number(data string) {
-
-}
-
-var scheme1 = importer.ParseScheme{
-	"scheme1", []importer.ParseSchemeCell{
-		{"Номер", number},
-		{"Название", number},
-		{"Эпоха", number},
-		{"Описание", number},
-		{"Библиографические ссылки", number},
-		{"Страницы", number},
-	},
-}
 
 // Защита от неожиданных ошибок и паник времени выполнения
 func panicGuard() {
@@ -46,7 +30,7 @@ func printErrorsJson(e []error) {
 func main() {
 	defer panicGuard()
 
-	importer, err := importer.New("input/test.xlsx", scheme1)
+	importer, err := importer.New("input/test.xlsx", parsers.NewParser1())
 	if err != nil {
 		panic(err)
 	}
@@ -54,8 +38,11 @@ func main() {
 	validationErrs := importer.ValidateHeader()
 	if len(validationErrs) == 0 {
 		importer.Parse()
-		query := importer.CypherString()
+		query, parseErrs := importer.CypherString()
 		println(query)
+		for _, err := range parseErrs {
+			println(err.Error())
+		}
 	} else {
 		printErrorsJson(validationErrs)
 	}

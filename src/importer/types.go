@@ -2,25 +2,20 @@ package importer
 
 import (
 	"xl"
-
-	"github.com/tealeg/xlsx"
 )
 
-type ParseSchemeCell struct {
-	Name   string
-	Parser func(string)
+type Parser interface {
+	Parse(*xl.Table) error
+	Scheme() *ParseScheme
+	CypherString(*xl.Table) (string, []error)
 }
 
 type ParseScheme struct {
 	Name  string
-	Cells []ParseSchemeCell
+	Cells []string
 }
 
 type Importer struct {
-	table   *xl.Table
-	scheme  ParseScheme
-	header  *xlsx.Row
-	rows    []*xlsx.Row
-	epochs  map[string]string
-	indexes map[string]int
+	parser Parser
+	table  *xl.Table
 }

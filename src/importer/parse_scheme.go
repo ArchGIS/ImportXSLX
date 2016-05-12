@@ -5,23 +5,22 @@ import (
 )
 
 func (my ParseScheme) Contains(name string) bool {
-	cell := my.Find(name)
-	return cell.Name != ""
+	return my.Find(name) != ""
 }
 
-func (my ParseScheme) Find(name string) ParseSchemeCell {
+func (my ParseScheme) Find(name string) string {
 	for _, cell := range my.Cells {
-		if cell.Name == name {
+		if cell == name {
 			return cell
 		}
 	}
 
-	return ParseSchemeCell{}
+	return ""
 }
 
 func (my ParseScheme) IndexOf(name string) int {
 	for index, cell := range my.Cells {
-		if cell.Name == name {
+		if cell == name {
 			return index
 		}
 	}
