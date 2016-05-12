@@ -3,3 +3,5 @@ pkg
 tmp
 cfg/
 src/github.com
+*.xlsx
+input/
