@@ -7,7 +7,7 @@ import (
 type Parser interface {
 	Parse(*xl.Table) error
 	Scheme() *ParseScheme
-	CypherString(*xl.Table) (string, []error)
+	CypherString(string, *xl.Table) (string, []error)
 }
 
 type ParseScheme struct {

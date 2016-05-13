@@ -34,6 +34,6 @@ func (my *Importer) Parse() error {
 	return my.parser.Parse(my.table)
 }
 
-func (my *Importer) CypherString() (string, []error) {
-	return my.parser.CypherString(my.table)
+func (my *Importer) CypherString(mapId string) (string, []error) {
+	return my.parser.CypherString(mapId, my.table)
 }

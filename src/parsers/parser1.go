@@ -11,6 +11,8 @@ import (
 	"xl"
 )
 
+const MAX_ROWS = 128
+
 func escape(s string) string {
 	return strings.Replace(s, `"`, `\"`, -1)
 }
@@ -24,6 +26,8 @@ var (
 	numRx = regexp.MustCompile(`[#№](\d+)`)
 	// "Имя И.И." "Имя" "Имя-Имя И.И."
 	nameRx = regexp.MustCompile(`[\p{L}-]+\s*\p{L}\.\p{L}\.|\p{L}+`)
+	// "1.0;1.3" "1.0,1.3" "1.0 1.3"
+	coordsRx = regexp.MustCompile(`(\d+\.\d+)\s*[;,]?\s*(\d+\.\d+)`)
 )
 
 var scheme1 = importer.ParseScheme{
@@ -31,9 +35,11 @@ var scheme1 = importer.ParseScheme{
 		"Номер",
 		"Название",
 		"Тип памятника",
+		"Культурная принадлежность",
 		"Эпоха",
 		"Описание",
 		"Библиографические ссылки",
+		"Координаты",
 		"Страницы",
 	},
 }
@@ -43,6 +49,7 @@ var mandatoryCells = []string{
 	"Эпоха",
 	"Название",
 	"Тип памятника",
+	"Культурная принадлежность",
 }
 
 var validators = map[string]func(string) bool{
@@ -52,27 +59,46 @@ var validators = map[string]func(string) bool{
 
 func NewParser1() *Parser1 {
 	return &Parser1{
-		scheme: &scheme1,
-		epochs: make(map[string]string),
+		scheme:   &scheme1,
+		epochs:   make(map[string]string),
+		cultures: make(map[string]string),
 	}
 }
 
+func fetchCoords(rawCoords string) (string, string, string) {
+	coords := coordsRx.FindStringSubmatch(rawCoords)
+	if 3 != len(coords) {
+		return "", "", "Неправильный формат координат"
+	}
+
+	return coords[1], coords[2], ""
+}
+
 func (my *Parser1) Parse(table *xl.Table) error {
-	// Отбираем уникальные эпохи
+	// Отбираем уникальные эпохи и культуры
 	const marker = "+"
 	for _, row := range table.Rows {
 		if enum.EpochExists(row.Cells["Эпоха"]) {
 			my.epochs[row.Cells["Эпоха"]] = marker
 		}
+		my.cultures[row.Cells["Культурная принадлежность"]] = marker
 	}
 	if len(my.epochs) == 0 {
 		return fmt.Errorf("Не найдено ни одной эпохи")
+	}
+	if len(my.cultures) == 0 {
+		return fmt.Errorf("Не заполнена ни одна культурная принадлежность")
 	}
 
 	// Присваиваем им уникальные в рамках запроса идентификаторы
 	index := 0
 	for epochName := range my.epochs {
 		my.epochs[epochName] = fmt.Sprintf("e%d", index)
+		index += 1
+	}
+	index = 0
+	for cultureName := range my.cultures {
+		my.cultures[cultureName] = fmt.Sprintf("c%d", index)
 		index += 1
 	}
 
@@ -94,14 +120,30 @@ func validateRow(row xl.Row, e *errs.RowError) {
 	}
 }
 
-func (my *Parser1) CypherString(table *xl.Table) (string, []error) {
+func (my *Parser1) CypherString(mapId string, table *xl.Table) (string, []error) {
+	if "" == mapId {
+		panic(errs.NewFatal("Не задан mapId"))
+	}
+
 	var buf bytes.Buffer
 	e := []error{}
+
+	buf.WriteString(fmt.Sprintf("MATCH (map:Literature {id:%s}\n", mapId))
+	buf.WriteString(fmt.Sprintf("MATCH (research:Research)-[:Contains]->(map)\n"))
 
 	// Собираем эпохи. Они "общие" для всего запроса.
 	for epoch, id := range my.epochs {
 		const epochPat = `MATCH (%s:Epoch {name:"%s"})` + "\n"
 		buf.WriteString(fmt.Sprintf(epochPat, id, epoch))
+	}
+	for culture, id := range my.cultures {
+		const culturePat = `MATCH (%s:Culture {name:"%s"})` + "\n"
+		buf.WriteString(fmt.Sprintf(culturePat, id, culture))
+	}
+
+	if len(table.Rows) > MAX_ROWS {
+		err := fmt.Errorf("Превышен лимит строк: %d/%d", len(table.Rows), MAX_ROWS)
+		return "", []error{err}
 	}
 
 	// Пишем строки данных для памятников
@@ -121,15 +163,30 @@ func (my *Parser1) CypherString(table *xl.Table) (string, []error) {
 		pages := cells["Страницы"]
 		n := cells["Номер"]
 		epoch := cells["Эпоха"]
+		culture := cells["Культурная принадлежность"]
 		name := cells["Название"]
 		ty := cells["Тип памятника"]
 
 		buf.WriteString(fmt.Sprintf("// Data for %s\n", key))
 
 		// Создание самого памятника.
-		buf.WriteString(
-			fmt.Sprintf("CREATE (%s {typeId:%d})\n", key, enum.MonumentTypeId(ty)),
-		)
+		if "" == cells["Координаты"] {
+			buf.WriteString(
+				fmt.Sprintf("CREATE (%s {typeId:%d})\n", key, enum.MonumentTypeId(ty)),
+			)
+		} else {
+			x, y, err := fetchCoords(cells["Координаты"])
+			if "" == err {
+				buf.WriteString(fmt.Sprintf(
+					"CREATE (%s {typeId:%d,x:%s,y:%s})\n",
+					key,
+					enum.MonumentTypeId(ty),
+					x, y,
+				))
+			} else {
+				rowErrs.PushError(err)
+			}
+		}
 
 		// Ребро от карты к памятнику
 		if "" == pages {
@@ -146,14 +203,20 @@ func (my *Parser1) CypherString(table *xl.Table) (string, []error) {
 		)
 
 		// Knowledge
+		knowledgeKey := key + "_k"
 		description := cells["Описание"]
 		if "" != description {
-			const pat = `CREATE (:Knowledge {name:"%s",description:"%s"})-[:Describes]->(%s)` + "\n"
-			buf.WriteString(fmt.Sprintf(pat, name, escape(description), key))
+			const pat = `CREATE (%s:Knowledge {name:"%s",description:"%s"})-[:Describes]->(%s)` + "\n"
+			buf.WriteString(fmt.Sprintf(pat, knowledgeKey, name, escape(description), key))
 		} else {
-			const pat = `CREATE (:Knowledge {name:"%s"})-[:Describes]->(%s)` + "\n"
-			buf.WriteString(fmt.Sprintf(pat, name, key))
+			const pat = `CREATE (%s:Knowledge {name:"%s"})-[:Describes]->(%s)` + "\n"
+			buf.WriteString(fmt.Sprintf(pat, knowledgeKey, name, key))
 		}
+		const cultureEdgePat = `CREATE (%s)-[:Mentions]->(%s)` + "\n"
+		buf.WriteString(fmt.Sprintf(cultureEdgePat, knowledgeKey, my.cultures[culture]))
+		buf.WriteString(fmt.Sprintf(
+			"CREATE (research)-[:Contains]->(%s)\n", knowledgeKey,
+		))
 
 		// Библиографические ссылки. Они должны быть разделены через ";"
 		litRefs := strings.Split(cells["Библиографические ссылки"], ";")

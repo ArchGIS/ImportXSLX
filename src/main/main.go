@@ -38,7 +38,7 @@ func main() {
 	validationErrs := importer.ValidateHeader()
 	if len(validationErrs) == 0 {
 		importer.Parse()
-		query, parseErrs := importer.CypherString()
+		query, parseErrs := importer.CypherString("1")
 		println(query)
 		for _, err := range parseErrs {
 			println(err.Error())
